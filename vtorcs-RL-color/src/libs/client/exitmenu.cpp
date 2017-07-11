@@ -23,6 +23,9 @@
 #include "exitmenu.h"
 #include "mainmenu.h"
 
+#include <sys/shm.h>
+extern void *shm;
+
 static void 
 endofprog(void * /* dummy */)
 {
@@ -30,7 +33,13 @@ endofprog(void * /* dummy */)
     PRINT_PROFILE();
 /*     glutSetKeyRepeat(GLUT_KEY_REPEAT_ON); */
     GfScrShutdown();
-    exit(0);
+//    exit(0);
+	if (shmdt(shm) == -1) {
+		fprintf(stderr, "shmdt failed\n");
+		exit (EXIT_FAILURE);
+	}
+	printf("\n********** Memory sharing stopped. Good Bye! **********\n");
+	exit (EXIT_SUCCESS);
 }
 
 static void *exitmenuHandle = NULL;

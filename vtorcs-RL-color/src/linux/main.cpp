@@ -26,6 +26,9 @@
 
 #include "linuxspec.h"
 
+#include <img_share.h>
+#include <sys/shm.h>
+
 static void
 init_args(int argc, char **argv)
 {
@@ -160,9 +163,40 @@ init_args(int argc, char **argv)
  * Remarks
  *	
  */
+
+/* Set up memory sharing */
+void *shm = NULL;
+
+void startMemorySharing() {
+
+	int shmid;
+	// establish memory sharing
+	shmid = shmget((key_t) 6703, sizeof(shared_use_st), 0666 | IPC_CREAT);
+	if (shmid == -1) {
+		fprintf(stderr, "shmget failed\n");
+		exit (EXIT_FAILURE);
+	}
+
+	shm = shmat(shmid, 0, 0);
+	if (shm == (void*) -1) {
+		fprintf(stderr, "shmat failed\n");
+		exit (EXIT_FAILURE);
+	}
+	printf(
+			"\n********** Memory sharing started, attached at %X **********\n \n",
+			shm);
+	// set up shared memory
+	shared_use_st* shared_memory = (shared_use_st*) shm;
+	shared_memory->written = 0;
+	shared_memory->pause = 0;
+
+}
+
+
 int 
 main(int argc, char *argv[])
 {
+	startMemorySharing();
     init_args(argc, argv);
     
     LinuxSpecInit();		/* init specific linux functions */

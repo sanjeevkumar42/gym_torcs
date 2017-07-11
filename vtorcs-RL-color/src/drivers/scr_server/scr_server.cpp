@@ -33,6 +33,8 @@
 #include <raceman.h>
 #include <robottools.h>
 #include <robot.h>
+#include <img_share.h>
+#include <tgfclient.h>
 
 #include "sensors.h"
 #include "SimpleParser.h"
@@ -137,6 +139,7 @@ static float trackSensAngle[NBBOTS][19];
 static char* botname[NBBOTS] = {"scr_server 1", "scr_server 2", "scr_server 3", "scr_server 4", "scr_server 5", "scr_server 6", "scr_server 7", "scr_server 8", "scr_server 9", "scr_server 10"};
 
 static unsigned long total_tics[NBBOTS];
+
 
 /*
  * Module entry point
@@ -326,9 +329,46 @@ newrace(int index, tCarElt* car, tSituation *s)
     oppSens[index] = new ObstacleSensors(36, curTrack, car, s, __SENSORS_RANGE__);
 
     prevDist[index]=-1;
+
+    std::cout << "Connected with client. Changing driver's view.\n";
+//    changeCameraView();
 }
 
 
+// Update image data in shared memory segment.
+int count = 0;
+
+void writeImageData() {
+	shared_use_st* shared_memory = (shared_use_st*) shm;
+	if (shared_memory->pause == 1) {
+		//    	 printf("Not paused writing to shared memory\n");
+		count++;
+		if (count > 50) {
+			count = 1;
+			uint8_t _data[image_width * image_height * 3];
+			glReadPixels(0, 0, image_width, image_height, GL_RGB,
+					GL_UNSIGNED_BYTE, (GLvoid*) (_data));
+			for (int h = 0; h < image_height; h++) {
+				for (int w = 0; w < image_width; w++) {
+					shared_memory->data[(h * image_width + w) * 3 + 2] =
+							_data[((image_height - h - 1) * image_width + w) * 3
+									+ 0];
+					shared_memory->data[(h * image_width + w) * 3 + 1] =
+							_data[((image_height - h - 1) * image_width + w) * 3
+									+ 1];
+					shared_memory->data[(h * image_width + w) * 3 + 0] =
+							_data[((image_height - h - 1) * image_width + w) * 3
+									+ 2];
+				}
+			}
+			shared_memory->written = 1;
+			printf("Wait for flag!!\n");
+			while (shared_memory->written == 1)
+				usleep(1);
+			printf("Out of waiting!!!, count: %d\n", count);
+		}
+	}
+}
 
 
 
@@ -575,9 +615,11 @@ if (RESTARTING[index]==0)
     // Set timeout for client answer
     FD_ZERO(&readSet);
     FD_SET(listenSocket[index], &readSet);
-    timeVal.tv_sec = 0;
+    timeVal.tv_sec = 10;
     timeVal.tv_usec = UDP_TIMEOUT;
     memset(line, 0x0,UDP_MSGLEN ); // GIUSE - BUG, THERE WAS A 1000 HARDCODED
+
+    writeImageData();
 
     if (select(listenSocket[index]+1, &readSet, NULL, NULL, &timeVal))
     {
